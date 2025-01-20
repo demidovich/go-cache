@@ -63,3 +63,24 @@ func TestOversize(t *testing.T) {
 	assert.Equal(t, "", val1)
 	assert.Equal(t, false, ok1)
 }
+
+func TestHits(t *testing.T) {
+	c := cacheInstance(5, 5)
+	c.Set("key1", "val1")
+
+	c.Get("key1")
+	c.Get("key1")
+
+	assert.Equal(t, 2, c.Hits())
+	assert.Equal(t, 0, c.Misses())
+}
+
+func TestMisses(t *testing.T) {
+	c := cacheInstance(5, 5)
+
+	c.Get("key1")
+	c.Get("key1")
+
+	assert.Equal(t, 2, c.Misses())
+	assert.Equal(t, 0, c.Hits())
+}

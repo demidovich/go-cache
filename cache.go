@@ -13,6 +13,8 @@ type Cache struct {
 	ll         *list.List
 	size       int
 	gcInterval time.Duration
+	hits       int
+	misses     int
 }
 
 type Config struct {
@@ -36,11 +38,12 @@ func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
 	}
 
 	go func() {
+		cleanup := time.Tick(cache.gcInterval)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(cache.gcInterval):
+			case <-cleanup:
 				cache.gcCleanup()
 			}
 		}
@@ -60,10 +63,12 @@ func (c *Cache) Get(k string) (string, bool) {
 
 	row, ok := c.data[k]
 	if !ok {
+		c.misses++
 		return "", false
 	}
 
 	c.ll.MoveToFront(row.llElem)
+	c.hits++
 
 	return row.value, true
 }
@@ -94,6 +99,14 @@ func (c *Cache) Delete(k string) {
 
 	c.ll.Remove(row.llElem)
 	delete(c.data, k)
+}
+
+func (c *Cache) Hits() int {
+	return c.hits
+}
+
+func (c *Cache) Misses() int {
+	return c.misses
 }
 
 func (c *Cache) gcCleanup() {
