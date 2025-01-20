@@ -50,7 +50,7 @@ func TestGetMissing(t *testing.T) {
 	assert.Equal(t, false, ok)
 }
 
-func TestOversize(t *testing.T) {
+func TestCleanupOversize(t *testing.T) {
 	c := cacheInstance(2, 1)
 	c.Set("key1", "val1") // Это вычистит GC
 	c.Set("key2", "val2")

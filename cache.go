@@ -38,12 +38,13 @@ func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
 	}
 
 	go func() {
-		cleanup := time.Tick(cache.gcInterval)
+		cleanup := time.NewTicker(cache.gcInterval)
 		for {
 			select {
 			case <-ctx.Done():
+				cleanup.Stop()
 				return
-			case <-cleanup:
+			case <-cleanup.C:
 				cache.gcCleanup()
 			}
 		}
