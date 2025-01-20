@@ -102,6 +102,10 @@ func (c *Cache) Delete(k string) {
 	delete(c.data, k)
 }
 
+func (c *Cache) Len() int {
+	return len(c.data)
+}
+
 func (c *Cache) Hits() int {
 	return c.hits
 }
