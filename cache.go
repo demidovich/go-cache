@@ -82,6 +82,10 @@ func (c *Cache) Delete(k string) {
 	c.shardByKey(k).Delete(k)
 }
 
+func (c *Cache) Capacity() int {
+	return c.capacity
+}
+
 func (c *Cache) Length() int {
 	return c.length
 }

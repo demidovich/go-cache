@@ -24,13 +24,30 @@ func TestConfig(t *testing.T) {
 	c := NewCacheWithConfig(
 		ctx,
 		Config{
+			Capacity:   3,
+			Shards:     2,
+			GcInterval: 1 * time.Second,
+		},
+	)
+
+	assert.Equal(t, 3, c.capacity)
+	assert.Equal(t, 2, len(c.shards))
+	assert.Equal(t, 2, int(c.shardsCount))
+	assert.Equal(t, 1*time.Second, c.gcInterval)
+}
+
+func TestConfigWithoutShards(t *testing.T) {
+	ctx := context.TODO()
+	c := NewCacheWithConfig(
+		ctx,
+		Config{
 			Capacity:   5,
 			GcInterval: 5 * time.Second,
 		},
 	)
 
-	assert.Equal(t, c.capacity, 5)
-	assert.Equal(t, c.gcInterval, 5*time.Second)
+	assert.Equal(t, 1, len(c.shards))
+	assert.Equal(t, 1, int(c.shardsCount))
 }
 
 func TestGetSet(t *testing.T) {
@@ -77,6 +94,12 @@ func TestCleanupOversize(t *testing.T) {
 
 	assert.Equal(t, "", val1)
 	assert.Equal(t, false, ok1)
+}
+
+func TestCapacity(t *testing.T) {
+	c := cacheInstance(5, 10*time.Millisecond)
+
+	assert.Equal(t, 5, c.Capacity())
 }
 
 func TestLength(t *testing.T) {
