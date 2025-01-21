@@ -7,55 +7,55 @@ import (
 )
 
 type Cache struct {
-	shards      []*shard
-	shardsCount uint32
-	capacity    int
-	length      int
-	hits        int
-	misses      int
-	gcInterval  time.Duration
+	buckets      []*bucket
+	bucketsCount uint32
+	capacity     int
+	length       int
+	hits         int
+	misses       int
+	gcInterval   time.Duration
 }
 
 type Config struct {
 	Capacity   int
-	Shards     int
+	Buckets    int
 	GcInterval time.Duration
 }
 
 func NewCache(ctx context.Context, config Config) *Cache {
 	return NewCacheWithConfig(ctx, Config{
 		Capacity:   10000,
-		Shards:     10,
+		Buckets:    10,
 		GcInterval: 10 * time.Second,
 	})
 }
 
 func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
-	if config.Shards < 1 {
-		config.Shards = 1
+	if config.Buckets < 1 {
+		config.Buckets = 1
 	}
 
 	cache := &Cache{
-		capacity:    config.Capacity,
-		shards:      make([]*shard, config.Shards),
-		shardsCount: uint32(config.Shards),
-		gcInterval:  config.GcInterval,
+		capacity:     config.Capacity,
+		buckets:      make([]*bucket, config.Buckets),
+		bucketsCount: uint32(config.Buckets),
+		gcInterval:   config.GcInterval,
 	}
 
-	shardCapacity := config.Capacity / config.Shards
-	for i := 0; i < config.Shards; i++ {
-		cache.shards[i] = newShard(shardCapacity)
+	bucketCapacity := config.Capacity / config.Buckets
+	for i := 0; i < config.Buckets; i++ {
+		cache.buckets[i] = newShard(bucketCapacity)
 	}
 
 	go func() {
-		maintenance := time.NewTicker(cache.gcInterval)
+		gc := time.NewTicker(cache.gcInterval)
 		for {
 			select {
 			case <-ctx.Done():
-				maintenance.Stop()
+				gc.Stop()
 				return
-			case <-maintenance.C:
-				cache.maintenance()
+			case <-gc.C:
+				cache.gc()
 			}
 		}
 	}()
@@ -63,23 +63,23 @@ func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
 	return cache
 }
 
-func (c *Cache) shardByKey(k string) *shard {
+func (c *Cache) bucketByKey(k string) *bucket {
 	i := crc32.ChecksumIEEE([]byte(k))
-	s := i % c.shardsCount
+	s := i % c.bucketsCount
 
-	return c.shards[s]
+	return c.buckets[s]
 }
 
 func (c *Cache) Get(k string) (string, bool) {
-	return c.shardByKey(k).Get(k)
+	return c.bucketByKey(k).Get(k)
 }
 
 func (c *Cache) Set(k string, v string) {
-	c.shardByKey(k).Set(k, v)
+	c.bucketByKey(k).Set(k, v)
 }
 
 func (c *Cache) Delete(k string) {
-	c.shardByKey(k).Delete(k)
+	c.bucketByKey(k).Delete(k)
 }
 
 func (c *Cache) Capacity() int {
@@ -98,17 +98,17 @@ func (c *Cache) Misses() int {
 	return c.misses
 }
 
-// Очистка в шардах значений, превышающих capacity
+// Очистка в бакетах значений, превышающих capacity
 // Агрегация данных о текущем размере данных и попаданиях в кэш
-func (c *Cache) maintenance() {
+func (c *Cache) gc() {
 	var length, hits, misses int
 
-	for _, shard := range c.shards {
-		shard.Cleanup()
+	for _, bucket := range c.buckets {
+		bucket.Cleanup()
 
-		length += shard.Length()
-		hits += shard.hits
-		misses += shard.misses
+		length += bucket.Length()
+		hits += bucket.hits
+		misses += bucket.misses
 	}
 
 	c.length = length

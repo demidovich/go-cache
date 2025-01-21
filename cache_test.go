@@ -25,18 +25,18 @@ func TestConfig(t *testing.T) {
 		ctx,
 		Config{
 			Capacity:   3,
-			Shards:     2,
+			Buckets:    2,
 			GcInterval: 1 * time.Second,
 		},
 	)
 
 	assert.Equal(t, 3, c.capacity)
-	assert.Equal(t, 2, len(c.shards))
-	assert.Equal(t, 2, int(c.shardsCount))
+	assert.Equal(t, 2, len(c.buckets))
+	assert.Equal(t, 2, int(c.bucketsCount))
 	assert.Equal(t, 1*time.Second, c.gcInterval)
 }
 
-func TestConfigWithoutShards(t *testing.T) {
+func TestConfigWithoutBuckets(t *testing.T) {
 	ctx := context.TODO()
 	c := NewCacheWithConfig(
 		ctx,
@@ -46,8 +46,8 @@ func TestConfigWithoutShards(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, 1, len(c.shards))
-	assert.Equal(t, 1, int(c.shardsCount))
+	assert.Equal(t, 1, len(c.buckets))
+	assert.Equal(t, 1, int(c.bucketsCount))
 }
 
 func TestGetSet(t *testing.T) {
