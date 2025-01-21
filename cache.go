@@ -1,40 +1,50 @@
 package cache
 
 import (
-	"container/list"
 	"context"
-	"sync"
+	"hash/crc32"
 	"time"
 )
 
 type Cache struct {
-	mu         sync.RWMutex
-	data       map[string]row
-	ll         *list.List
-	size       int
-	gcInterval time.Duration
-	hits       int
-	misses     int
+	shards      []*shard
+	shardsCount uint32
+	capacity    int
+	length      int
+	hits        int
+	misses      int
+	gcInterval  time.Duration
 }
 
 type Config struct {
-	Size       int
+	Capacity   int
+	Shards     int
 	GcInterval time.Duration
 }
 
 func NewCache(ctx context.Context, config Config) *Cache {
 	return NewCacheWithConfig(ctx, Config{
-		Size:       100000,
+		Capacity:   10000,
+		Shards:     10,
 		GcInterval: 10 * time.Second,
 	})
 }
 
 func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
+	if config.Shards < 1 {
+		config.Shards = 1
+	}
+
 	cache := &Cache{
-		data:       make(map[string]row),
-		ll:         list.New(),
-		size:       config.Size,
-		gcInterval: config.GcInterval,
+		capacity:    config.Capacity,
+		shards:      make([]*shard, config.Shards),
+		shardsCount: uint32(config.Shards),
+		gcInterval:  config.GcInterval,
+	}
+
+	shardCapacity := config.Capacity / config.Shards
+	for i := 0; i < config.Shards; i++ {
+		cache.shards[i] = newShard(shardCapacity)
 	}
 
 	go func() {
@@ -53,57 +63,27 @@ func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
 	return cache
 }
 
-type row struct {
-	llElem *list.Element
-	value  string
+func (c *Cache) shardByKey(k string) *shard {
+	i := crc32.ChecksumIEEE([]byte(k))
+	s := i % c.shardsCount
+
+	return c.shards[s]
 }
 
 func (c *Cache) Get(k string) (string, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	row, ok := c.data[k]
-	if !ok {
-		c.misses++
-		return "", false
-	}
-
-	c.ll.MoveToFront(row.llElem)
-	c.hits++
-
-	return row.value, true
+	return c.shardByKey(k).Get(k)
 }
 
 func (c *Cache) Set(k string, v string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	row, ok := c.data[k]
-	if ok {
-		row.value = v
-	} else {
-		llElem := c.ll.PushFront(k)
-		row.llElem = llElem
-		row.value = v
-		c.data[k] = row
-	}
+	c.shardByKey(k).Set(k, v)
 }
 
 func (c *Cache) Delete(k string) {
-	row, ok := c.data[k]
-	if !ok {
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.ll.Remove(row.llElem)
-	delete(c.data, k)
+	c.shardByKey(k).Delete(k)
 }
 
-func (c *Cache) Len() int {
-	return len(c.data)
+func (c *Cache) Length() int {
+	return c.length
 }
 
 func (c *Cache) Hits() int {
@@ -115,17 +95,17 @@ func (c *Cache) Misses() int {
 }
 
 func (c *Cache) gcCleanup() {
-	if len(c.data) < c.size {
-		return
+	var length, hits, misses int
+
+	for _, shard := range c.shards {
+		shard.GcCleanup()
+
+		length += shard.Length()
+		hits += shard.hits
+		misses += shard.misses
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for len(c.data) > c.size {
-		elem := c.ll.Back()
-		key, _ := elem.Value.(string)
-		delete(c.data, key)
-		c.ll.Remove(elem)
-	}
+	c.length = length
+	c.hits = hits
+	c.misses = misses
 }

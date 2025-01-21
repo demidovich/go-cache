@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func cacheInstance(size int, gcIntervalSeconds int) *Cache {
+func cacheInstance(capacity int, gcInterval time.Duration) *Cache {
 	ctx := context.TODO()
 	return NewCacheWithConfig(
 		ctx,
 		Config{
-			Size:       size,
-			GcInterval: time.Duration(gcIntervalSeconds) * time.Second,
+			Capacity:   capacity,
+			GcInterval: gcInterval,
 		},
 	)
 }
@@ -24,17 +24,18 @@ func TestConfig(t *testing.T) {
 	c := NewCacheWithConfig(
 		ctx,
 		Config{
-			Size:       5,
+			Capacity:   5,
 			GcInterval: 5 * time.Second,
 		},
 	)
 
-	assert.Equal(t, c.size, 5)
+	assert.Equal(t, c.capacity, 5)
 	assert.Equal(t, c.gcInterval, 5*time.Second)
 }
 
 func TestGetSet(t *testing.T) {
-	c := cacheInstance(5, 5)
+	c := cacheInstance(5, time.Second)
+
 	c.Set("key1", "val1")
 	val, ok := c.Get("key1")
 
@@ -43,7 +44,8 @@ func TestGetSet(t *testing.T) {
 }
 
 func TestGetMissing(t *testing.T) {
-	c := cacheInstance(5, 5)
+	c := cacheInstance(5, time.Second)
+
 	val, ok := c.Get("missingKey")
 
 	assert.Equal(t, "", val)
@@ -51,7 +53,8 @@ func TestGetMissing(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	c := cacheInstance(5, 5)
+	c := cacheInstance(5, time.Second)
+
 	c.Set("key1", "val1")
 	c.Delete("key1")
 
@@ -62,12 +65,13 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCleanupOversize(t *testing.T) {
-	c := cacheInstance(2, 1)
+	c := cacheInstance(2, 10*time.Millisecond)
+
 	c.Set("key1", "val1") // Это вычистит GC
 	c.Set("key2", "val2")
 	c.Set("key3", "val3")
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(20 * time.Millisecond)
 
 	val1, ok1 := c.Get("key1")
 
@@ -75,34 +79,39 @@ func TestCleanupOversize(t *testing.T) {
 	assert.Equal(t, false, ok1)
 }
 
-func TestLen(t *testing.T) {
-	c := cacheInstance(5, 5)
+func TestLength(t *testing.T) {
+	c := cacheInstance(5, 10*time.Millisecond)
+
 	c.Set("key1", "val1")
 	c.Set("key2", "val2")
+	time.Sleep(20 * time.Millisecond)
 
-	assert.Equal(t, 2, c.Len())
+	assert.Equal(t, 2, c.Length())
 
 	c.Delete("key1")
+	time.Sleep(20 * time.Millisecond)
 
-	assert.Equal(t, 1, c.Len())
+	assert.Equal(t, 1, c.Length())
 }
 
 func TestHits(t *testing.T) {
-	c := cacheInstance(5, 5)
-	c.Set("key1", "val1")
+	c := cacheInstance(5, 10*time.Millisecond)
 
+	c.Set("key1", "val1")
 	c.Get("key1")
 	c.Get("key1")
+	time.Sleep(20 * time.Millisecond)
 
 	assert.Equal(t, 2, c.Hits())
 	assert.Equal(t, 0, c.Misses())
 }
 
 func TestMisses(t *testing.T) {
-	c := cacheInstance(5, 5)
+	c := cacheInstance(5, 10*time.Millisecond)
 
 	c.Get("key1")
 	c.Get("key1")
+	time.Sleep(20 * time.Millisecond)
 
 	assert.Equal(t, 2, c.Misses())
 	assert.Equal(t, 0, c.Hits())
