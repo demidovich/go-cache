@@ -83,7 +83,8 @@ func (s *shard) Misses() int {
 	return s.misses
 }
 
-func (s *shard) GcCleanup() {
+// Удаление значений, превышающих capacity шарда
+func (s *shard) Cleanup() {
 	if len(s.data) < s.capacity {
 		return
 	}

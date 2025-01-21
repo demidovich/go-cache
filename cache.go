@@ -48,14 +48,14 @@ func NewCacheWithConfig(ctx context.Context, config Config) *Cache {
 	}
 
 	go func() {
-		cleanup := time.NewTicker(cache.gcInterval)
+		maintenance := time.NewTicker(cache.gcInterval)
 		for {
 			select {
 			case <-ctx.Done():
-				cleanup.Stop()
+				maintenance.Stop()
 				return
-			case <-cleanup.C:
-				cache.gcCleanup()
+			case <-maintenance.C:
+				cache.maintenance()
 			}
 		}
 	}()
@@ -98,11 +98,13 @@ func (c *Cache) Misses() int {
 	return c.misses
 }
 
-func (c *Cache) gcCleanup() {
+// Очистка в шардах значений, превышающих capacity
+// Агрегация данных о текущем размере данных и попаданиях в кэш
+func (c *Cache) maintenance() {
 	var length, hits, misses int
 
 	for _, shard := range c.shards {
-		shard.GcCleanup()
+		shard.Cleanup()
 
 		length += shard.Length()
 		hits += shard.hits
